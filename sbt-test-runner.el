@@ -45,10 +45,10 @@
                         (jsonrpc-request sbt-test-sbt-jsonrpc-endpoint 'initialize '(initializationOptions #s(hash-table))))
                       ,@body))
 
-(defun sbt-test-run-pipa (callback)
+(defun sbt-test-refresh-metadata (callback)
   (sbt-test-with-initialized-socket
    (condition-case err
-       (jsonrpc-async-request sbt-test-sbt-jsonrpc-endpoint 'sbt/exec '(commandLine "pipa")
+       (jsonrpc-async-request sbt-test-sbt-jsonrpc-endpoint 'sbt/exec '(commandLine "testsMetadataRefresh")
                               :success-fn (jsonrpc-lambda (&key status exitCode &allow-other-keys)
                                             (message "Server replied back with %s and %s!" status exitCode)
                                             (funcall callback))
@@ -59,21 +59,22 @@
 (defun sbt-test-fetch-test-runner-data (callback)
   (sbt-test-with-initialized-socket
    (condition-case err
-       (jsonrpc-async-request sbt-test-sbt-jsonrpc-endpoint 'sbt/setting '(setting "*/testRunnerData")
+       (jsonrpc-async-request sbt-test-sbt-jsonrpc-endpoint 'sbt/setting '(setting "*/testsMetadata")
                               :success-fn (jsonrpc-lambda (&key value contentType)
-                                            (funcall callback value))
+                                            (with-local-quit
+                                              (funcall callback value)))
                               :error-fn (lambda (response)
                                           (error "Sadly, server reports %s" response)))
      ('jsonrpc-error (sbt-test-sbt-jsonrp-handle-error err)))))
 
 (defun sbt-test-refresh-data (callback)
-  (sbt-test-run-pipa
+  (sbt-test-refresh-metadata
    (lambda ()
      (sbt-test-fetch-test-runner-data
       (lambda (data)
         (with-current-buffer (sbt:buffer-name)
           (setq sbt-test-sbt-data data)
-          (funcall callback data)))))))
+          (funcall callback (plist-get data :baseDirectory) (plist-get data :projects))))))))
 
 (defun sbt-test-test-data-to-string (project test-data)
   (propertize (concat project "/" (plist-get test-data :test))
@@ -90,6 +91,7 @@
   (let ((test-collection (seq-reduce #'sbt-test-process projects nil)))
     (when-let ((test-to-run (ivy-read "Run test: " test-collection
                                       :initial-input initial-input
+                                      :caller 'sbt-test-read
                                       :action (lambda (x)
                                                 (let* ((file-source (substring (get-text-property 0 :source x) 7))  ;; Drop ${BASE}
                                                        (file-path (concat base-directory file-source)))
@@ -120,22 +122,24 @@
         (sbt-test-with-sbt-buffer
          (if (null sbt-test-sbt-data)
              (user-error "No sbt data available.")
-           (let* ((bases (seq-map (lambda (record)
+           (let* ((base-directory (plist-get sbt-test-sbt-data :baseDirectory))
+                  (projects (plist-get sbt-test-sbt-data :projects))
+                  (bases (seq-map (lambda (record)
                                     (plist-get record :base))
-                                  sbt-test-sbt-data))
+                                  projects))
                   (sorted-bases (seq-sort-by #'length #'> bases))
                   (project-base (seq-find (lambda (base)
                                             (string-prefix-p base current-scala-file))
                                           sorted-bases))
                   (file-project-data (seq-find (lambda (record)
                                                  (eq project-base (plist-get record :base)))
-                                               sbt-test-sbt-data))
+                                               projects))
                   (project (plist-get file-project-data :project))
                   (is-test-file (seq-some (lambda (source-directory)
                                             (string-prefix-p source-directory current-scala-file))
                                           (plist-get file-project-data :sourceDirectories))))
              (if is-test-file
-                 (sbt-test-read-data sbt-test-sbt-data (format "%s %s" project scala-class))
+                 (sbt-test-read-data base-directory projects (format "%s %s" project scala-class))
                (user-error "No Scala test file: %s" current-scala-file))))))
     (user-error "No Scala file.")))
 
