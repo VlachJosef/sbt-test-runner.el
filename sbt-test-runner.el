@@ -130,36 +130,6 @@
     (when (search-forward-regexp "class \\([[:word:]]+\\)\\( \\|\n\\)*extends" nil t)
       (match-string-no-properties 1))))
 
-(defun sbt-test-absolute-path(base-directory test-data)
-  (let ((file-source (substring (plist-get test-data :source) 7)))  ;; Drop ${BASE}
-    (concat base-directory file-source)))
-
-(defun sbt-test-gather-file-info (scala-file cb)
-  (sbt-test-with-test-data
-    (let* ((base-directory (plist-get sbt-test-sbt-data :baseDirectory))
-           (projects (plist-get sbt-test-sbt-data :projects))
-           (bases (seq-map (lambda (record)
-                             (plist-get record :base))
-                           projects))
-           (sorted-bases (seq-sort-by #'length #'> bases))
-           (project-base (seq-find (lambda (base)
-                                     (string-prefix-p base scala-file))
-                                   sorted-bases))
-           (file-project-data (seq-find (lambda (record)
-                                          (eq project-base (plist-get record :base)))
-                                        projects))
-           (project (plist-get file-project-data :project))
-           (test-data (seq-find (lambda (test-data)
-                                  (string= scala-file (sbt-test-absolute-path base-directory test-data)))
-                                (plist-get file-project-data :definedTests))))
-      (if test-data
-          (funcall cb (sbt-test-file-data-create
-                       :absolute-path scala-file
-                       :project project
-                       :suite (plist-get test-data :suite)
-                       :test (plist-get test-data :test)))
-        (message "No Scala test file: %s" scala-file)))))
-
 (defmacro sbt-test-with-project-data (file-project &rest body)
   (declare (indent 2) (debug t))
   `(let ((cur-buf (current-buffer)))
@@ -179,69 +149,41 @@
          (with-current-buffer cur-buf
            ,@body)))))
 
-(cl-defstruct (sbt-test-file-data (:constructor sbt-test-file-data-create)
-                                  (:copier nil)
-                                  (:conc-name sbt-test-file-data->))
-  absolute-path
-  project
-  suite
-  test)
-
-(defun sbt-test-identify-file ()
-  (interactive)
-  (if (derived-mode-p 'scala-mode)
-      (let ((current-scala-file buffer-file-name)
-            (scala-class (sbt-test-detect-scala-class)))
-        (sbt-test-in-sbt-buffer
-         (if (null sbt-test-sbt-data)
-             (user-error "No sbt data available.")
-           (let* ((base-directory (plist-get sbt-test-sbt-data :baseDirectory))
-                  (projects (plist-get sbt-test-sbt-data :projects))
-                  (bases (seq-map (lambda (record)
-                                    (plist-get record :base))
-                                  projects))
-                  (sorted-bases (seq-sort-by #'length #'> bases))
-                  (project-base (seq-find (lambda (base)
-                                            (string-prefix-p base current-scala-file))
-                                          sorted-bases))
-                  (file-project-data (seq-find (lambda (record)
-                                                 (eq project-base (plist-get record :base)))
-                                               projects))
-                  (project (plist-get file-project-data :project))
-                  (is-test-file (seq-some (lambda (source-directory)
-                                            (string-prefix-p source-directory current-scala-file))
-                                          (plist-get file-project-data :sourceDirectories))))
-             (if is-test-file
-                 (sbt-test-read-data base-directory projects (format "%s %s" project scala-class))
-               (user-error "No Scala test file: %s" current-scala-file))))))
-    (user-error "No Scala file.")))
-
 (defun sbt-test-select-all-tests ()
   (interactive)
   (sbt-test-with-test-data
     (sbt-test-read-data (plist-get sbt-test-sbt-data :baseDirectory) (plist-get sbt-test-sbt-data :projects))))
 
+(defun sbt-test-select-project-tests ()
+  (interactive)
+  (sbt-test-with-project-data file-project
+      (if (derived-mode-p 'scala-mode)
+          (sbt-test-read-data (plist-get sbt-test-sbt-data :baseDirectory) (list file-project))
+        (message "Not a Scala file."))))
+
 (defun sbt-test--drop-base (source)
   "SOURCE start with ${BASE} prefix. We need to drop it."
   (substring source 7))
+
+(defun sbt-test--defined-test (project-data)
+  (seq-find (lambda (defined-test)
+              (string-suffix-p (sbt-test--drop-base (plist-get defined-test :source)) buffer-file-name))
+            (plist-get project-data :definedTests)))
 
 (defun sbt-test-run-current ()
   "Run current test file."
   (interactive)
   (sbt-test-with-project-data project-data
       (if (derived-mode-p 'scala-mode)
-          (let* ((defined-test (seq-find (lambda (defined-test)
-                                           (string-suffix-p (sbt-test--drop-base (plist-get defined-test :source)) buffer-file-name))
-                                         (plist-get project-data :definedTests)))
-                 (project (plist-get project-data :project))
-                 (test-class (plist-get defined-test :test)))
-            (message "%s/testOnly %s" project test-class))
-        (message "No Scala file."))))
+          (if-let ((defined-test (sbt-test--defined-test project-data))
+                   (project (plist-get project-data :project))
+                   (test-class (plist-get defined-test :test)))
+              (let ((command (format "testOnly %s" test-class)))
+                (sbt-hydra:run-run-project-command command project)
+                (message (format "Running: %s/%s" project command)))
+            (message "Not a test file: %s" buffer-file-name))
+        (message "Not a Scala file."))))
 
-(defun sbt-test-select-current-project ()
-  (interactive)
-  (sbt-test-with-test-data
-    (sbt-test-read-data (plist-get sbt-test-sbt-data :baseDirectory) (plist-get sbt-test-sbt-data :projects))))
 
 (defun sbt-test-sbt-jsonrp-handle-error (jsonrpc-error)
   (cl-destructuring-bind ((_ . code) (_ . message) (_ . data)) (cdr (cdr jsonrpc-error))
