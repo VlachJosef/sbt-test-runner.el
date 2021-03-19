@@ -122,7 +122,7 @@
   (interactive)
   (sbt-test-in-sbt-buffer
    (setq sbt-test-sbt-data nil)
-   (sbt-test-refresh-data #'ignore)))
+   (sbt-test-refresh-data (lambda () (message "Done refreshing.")))))
 
 (defun sbt-test-detect-scala-class ()
   (save-excursion

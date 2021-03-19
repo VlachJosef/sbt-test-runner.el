@@ -24,10 +24,11 @@
                                                 :test-name trimmed-test-name)))))
 
 (defun sbt-test-munit-find-test-name ()
-  (save-excursion
-    (search-backward "test(" nil t)
-    (search-forward-regexp sbt-test-munit-regex nil t)
-    (string-trim (substring-no-properties (match-string 1)))))
+  (when (derived-mode-p 'scala-mode)
+    (save-excursion
+      (search-backward "test(" nil t)
+      (search-forward-regexp sbt-test-munit-regex nil t)
+      (string-trim (substring-no-properties (match-string 1))))))
 
 (defun sbt-test-absolute-path (base-directory test-data)
   (let ((file-source (substring (plist-get test-data :source) 7)))  ;; Drop ${BASE}
@@ -48,21 +49,6 @@
               (message "Not munit suite %s" buffer-file-name)))
         (message "Not a Scala file."))))
 
-(defun sbt-test-munit-select-test ()
-  (interactive)
-  (sbt-test-with-munit-test
-   (let* ((raw-collection (sbt-test-munit-matches-in-buffer sbt-test-munit-regex))
-          (collection (seq-map #'sbt-test-munit-propertize-test raw-collection)))
-     (if (null collection)
-         (message "No test found!")
-       (let* ((selection (ivy-read "Run test: " collection
-                                   :caller 'sbt-test-read
-                                   :action (lambda (x)
-                                             (goto-char (point-min))
-                                             (forward-line (1- (string-to-number (get-text-property 0 :line-number x)))))))
-              (test-name (get-text-property 0 :test-name selection)))
-         (message "selection %s" selection))))))
-
 (defun sbt-test-munit-jump-to-test-name (test-name current-test-name)
   (let ((selected-test-name (get-text-property 0 :test-name current-test-name))
         (line-number (string-to-number (get-text-property 0 :line-number current-test-name))))
@@ -71,18 +57,28 @@
       (goto-char (point-min))
       (forward-line (1- line-number)))))
 
+(defun sbt-test-munit-select-test ()
+  (interactive)
+  (sbt-test-munit-select-and-run nil
+                                 (lambda (x)
+                                   (goto-char (point-min))
+                                   (forward-line (1- (string-to-number (get-text-property 0 :line-number x)))))))
+
 (defun sbt-test-munit-prefer-current ()
   (interactive)
+  (let ((test-name (sbt-test-munit-find-test-name)))
+    (sbt-test-munit-select-and-run test-name (lambda (x) (sbt-test-munit-jump-to-test-name test-name x)))))
+
+(defun sbt-test-munit-select-and-run (initial-input action)
   (sbt-test-with-munit-test
-   (let* ((test-name (sbt-test-munit-find-test-name))
-          (raw-collection (sbt-test-munit-matches-in-buffer sbt-test-munit-regex))
+   (let* ((raw-collection (sbt-test-munit-matches-in-buffer sbt-test-munit-regex))
           (collection (seq-map #'sbt-test-munit-propertize-test raw-collection)))
      (if (null collection)
          (message "No test found!")
        (let* ((selection (ivy-read "Run test: " collection
-                                   :initial-input test-name
+                                   :initial-input initial-input
                                    :caller 'sbt-test-read
-                                   :action (lambda (x) (sbt-test-munit-jump-to-test-name test-name x))))
+                                   :action action))
               (selected-test-name (get-text-property 0 :test-name selection))
               (defined-test (sbt-test--defined-test project-data))
               (project (plist-get project-data :project))
