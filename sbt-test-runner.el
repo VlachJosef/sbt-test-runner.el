@@ -98,6 +98,12 @@
               :test (plist-get test-data :test)
               :source (plist-get test-data :source)))
 
+(defun sbt-test-class-name (test)
+  "Given TEST which represent fqn class name, it will return only class identifier"
+  (let ((class-name-rx (rx ?. (group (+? (and (not ?.)))) eol)))
+    (string-match class-name-rx test)
+    (match-string-no-properties 1 test)))
+
 (defun sbt-test-process (acc el)
   (let ((project (plist-get el :project))
         (definedTests (plist-get el :definedTests)))
@@ -110,9 +116,14 @@
                                       :caller 'sbt-test-read
                                       :action (lambda (x)
                                                 (let* ((file-source (substring (get-text-property 0 :source x) 7))  ;; Drop ${BASE}
-                                                       (file-path (concat base-directory file-source)))
+                                                       (file-path (concat base-directory file-source))
+                                                       (test (get-text-property 0 :test x)))
                                                   (if (file-readable-p file-path)
-                                                      (find-file file-path)
+                                                      (progn
+                                                        (find-file file-path)
+                                                        (goto-char (point-min))
+                                                        (when (search-forward-regexp (sbt-test-class-name test))
+                                                          (goto-char (match-beginning 0))))
                                                     (error "Problem open file: %s" file-path))))))
                (project (get-text-property 0 :project test-to-run))
                (test (get-text-property 0 :test test-to-run)))

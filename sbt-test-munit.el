@@ -42,12 +42,12 @@
 (defmacro sbt-test-with-munit-test (&rest body)
   (interactive)
   `(sbt-test-with-project-data project-data
-      (if (derived-mode-p 'scala-mode)
-          (let ((test-data (sbt-test-munit--find-defined-test base-directory project-data)))
-            (if (string= "munit" (plist-get test-data :suite))
-                ,@body
-              (message "Not munit suite %s" buffer-file-name)))
-        (message "Not a Scala file."))))
+       (if (derived-mode-p 'scala-mode)
+           (let ((test-data (sbt-test-munit--find-defined-test base-directory project-data)))
+             (if (string= "munit" (plist-get test-data :suite))
+                 ,@body
+               (message "Not munit suite %s" buffer-file-name)))
+         (message "Not a Scala file."))))
 
 (defun sbt-test-munit-jump-to-test-name (test-name current-test-name)
   (let ((selected-test-name (get-text-property 0 :test-name current-test-name))
@@ -61,8 +61,10 @@
   (interactive)
   (sbt-test-munit-select-and-run nil
                                  (lambda (x)
-                                   (goto-char (point-min))
-                                   (forward-line (1- (string-to-number (get-text-property 0 :line-number x)))))))
+                                   (let ((line-number (string-to-number (get-text-property 0 :line-number x))))
+                                     (goto-char (point-min))
+                                     (forward-line (1- line-number))
+                                     (back-to-indentation)))))
 
 (defun sbt-test-munit-prefer-current ()
   (interactive)
