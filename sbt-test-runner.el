@@ -124,10 +124,12 @@
                                                         (goto-char (point-min))
                                                         (when (search-forward-regexp (sbt-test-class-name test))
                                                           (goto-char (match-beginning 0))))
-                                                    (error "Problem open file: %s" file-path))))))
+                                                    (error "Problem opening file: %s" file-path))))))
                (project (get-text-property 0 :project test-to-run))
-               (test (get-text-property 0 :test test-to-run)))
-      (sbt:command (format "%s/testOnly %s" project test)))))
+               (test (get-text-property 0 :test test-to-run))
+               (command (format "testOnly %s" test) ))
+      (sbt-hydra:run-run-project-command command project)
+      (message (format "Running: %s/%s" project command)))))
 
 (defun sbt-test-refresh ()
   (interactive)
@@ -169,7 +171,7 @@
   (interactive)
   (sbt-test-with-project-data file-project
       (if (derived-mode-p 'scala-mode)
-          (sbt-test-read-data (plist-get sbt-test-sbt-data :baseDirectory) (list file-project))
+          (sbt-test-read-data base-directory (list file-project))
         (message "Not a Scala file."))))
 
 (defun sbt-test--drop-base (source)

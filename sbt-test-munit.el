@@ -85,7 +85,7 @@
               (defined-test (sbt-test--defined-test project-data))
               (project (plist-get project-data :project))
               (test-class (plist-get defined-test :test))
-              (command (format "testOnly %s -- \"--tests=%s" test-class (substring selected-test-name 1)) ))
+              (command (format "testOnly %s -- \"--tests=%s" test-class (substring selected-test-name 1))))
          (sbt-hydra:run-run-project-command command project)
          (message (format "Running: %s/%s" project command)))))))
 
