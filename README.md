@@ -32,6 +32,8 @@ project/testOnly foo.bar.BazSpec
 
 Choose from all available tests across **all projects** to select the one to run.
 
+![sbt-test-select-all-tests in action](gifs/sbt-test-select-all-tests.gif)
+
 
 ### Select from current project
 
