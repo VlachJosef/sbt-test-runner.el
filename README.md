@@ -2,19 +2,15 @@
 
 Convenient functions for quickly selecting Scala test file to run.
 
-## Goal of the project
+## Goal of this project
 
-Goal of this project is to be able to run Scala test files with minimal setup. Only tool necessary is to have sbt 1.4.x project and to have enabled [sbt-tests-metadata](https://github.com/VlachJosef/sbt-tests-metadata) sbt plugin.
+Goal of this project is to run Scala test files with minimal setup. Only tool necessary is to have sbt 1.4.x (or newer) project and to have enabled [sbt-tests-metadata](https://github.com/VlachJosef/sbt-tests-metadata) sbt plugin.
 
 ## Dependencies
 
-For following commands to work you need to have enabled [sbt-tests-metadata](https://github.com/VlachJosef/sbt-tests-metadata) sbt plugin in your project and you have to be using **sbt 1.4.x**.
+For following commands to work you need to have [sbt-tests-metadata](https://github.com/VlachJosef/sbt-tests-metadata) sbt plugin enabled and you have to be using **sbt 1.4.x** or newer.
 
-Easiest way to enable `sbt-tests-metadata` plugin is adding following line into global `~/.sbt/1.0/plugins/plugins.sbt` file:
-
-```
-addSbtPlugin("vlach" % "sbt-tests-metadata" % "0.1.0-SNAPSHOT")
-```
+Read [sbt-tests-metadata instalation instruction](https://github.com/VlachJosef/sbt-tests-metadata#installation) for details.
 
 ## Available commands
 
@@ -57,9 +53,9 @@ Directly runs current Scala test file.
 
 ## Special munit support
 
-Since [munit](https://scalameta.org/munit/) allows only one way to define test, it is relative easy to detect all runnable test names just by parsing current scala file for `test(...)` occurences, and presenting these to the user for selecting desired test to run.
+Since [munit](https://scalameta.org/munit/) allows only one way to define tests, it is easy to detect all runnable test names by parsing current scala file for `test(...)` occurrences. User then can easily choose what test to run.
 
-When in munit file two additional commands are available.
+When in test file inheriting from `munit.FunSuite` two additional commands are available:
 
 ### Select test to run in current test file
 
